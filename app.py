@@ -2,15 +2,15 @@ import streamlit as st
 import google.generativeai as genai
 from PIL import Image
 
-# Gemini setup
+# Configure Gemini
 api_key = st.secrets["api_keys"]["google_api_key"]
 genai.configure(api_key=api_key)
 model = genai.GenerativeModel("gemini-1.5-flash")
 
-# App config
+# Streamlit UI
 st.set_page_config(page_title="Accessibility Caption Generator")
 st.title("Accessibility Caption Generator")
-st.write("Upload an image to generate a concise accessibility-friendly caption.")
+st.write("Upload an image to generate a concise alt text caption for screen readers and accessibility tools.")
 
 # Upload image
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
@@ -21,11 +21,11 @@ if uploaded_file:
 
     if st.button("Generate Caption"):
         with st.spinner("Analyzing image..."):
-            response = model.generate_content(
-                [uploaded_file.getvalue()],
-                mime_type="image/png",
-                prompt="Generate a short, descriptive alt text caption for this image suitable for screen readers."
-            )
+            image_bytes = uploaded_file.getvalue()
+            response = model.generate_content([
+                {"mime_type": "image/png", "data": image_bytes},
+                {"text": "Generate a short, descriptive alt text caption for this image suitable for screen readers."}
+            ])
             caption = response.text.strip()
 
             st.subheader("Generated Caption")
