@@ -1,36 +1,59 @@
 import streamlit as st
-import google.generativeai as genai
 from PIL import Image
-import io
+import base64
+import requests
+from io import BytesIO
 
-# Configure Gemini
-api_key = st.secrets["api_keys"]["google_api_key"]
-genai.configure(api_key=api_key)
+# ============ Gemini API Setup ============
+API_KEY = st.secrets["google_api_key"]
+GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+def image_to_base64(img: Image.Image):
+    buffered = BytesIO()
+    img.save(buffered, format="PNG")
+    return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-# Streamlit UI
+def call_gemini_with_image(image_data_b64, prompt_text):
+    headers = {"Content-Type": "application/json"}
+    body = {
+        "contents": [
+            {
+                "parts": [
+                    {
+                        "inline_data": {
+                            "mime_type": "image/png",
+                            "data": image_data_b64
+                        }
+                    },
+                    {
+                        "text": prompt_text
+                    }
+                ]
+            }
+        ]
+    }
+    response = requests.post(f"{GEMINI_API_URL}?key={API_KEY}", headers=headers, json=body)
+    try:
+        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except:
+        return "Gemini API Error."
+
+# ============ Streamlit UI ============
 st.set_page_config(page_title="Accessibility Caption Generator")
 st.title("Accessibility Caption Generator")
 st.write("Upload an image to generate an alt text caption for screen reader accessibility.")
 
-# File upload
-uploaded_file = st.file_uploader("Upload an image", type=["png", "jpg", "jpeg"])
+uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    image = Image.open(uploaded_file)
+    image = Image.open(uploaded_file).convert("RGB")
     st.image(image, caption="Uploaded Image", use_column_width=True)
 
     if st.button("Generate Caption"):
         with st.spinner("Analyzing image..."):
-            image_bytes = uploaded_file.read()
+            image_b64 = image_to_base64(image)
+            prompt = "Generate a short, descriptive alt text caption for this image suitable for screen readers."
+            result = call_gemini_with_image(image_b64, prompt)
 
-            # Send image + instruction to Gemini
-            response = model.generate_content([
-                genai.types.ContentPart.from_image_data(image_bytes),
-                genai.types.ContentPart.from_text("Generate a concise, accessibility-friendly alt text caption for this image.")
-            ])
-
-            caption = response.text.strip()
-            st.subheader("Generated Caption")
-            st.success(caption)
+        st.subheader("Generated Caption")
+        st.success(result)
